@@ -44,6 +44,9 @@ jobs:
 
   release:
     needs: [wheel, binaries]
+    # Publish as long as the wheel built, even if a per-OS binary failed, so one platform's build
+    # problem never blocks the release of the rest.
+    if: ${{ always() && needs.wheel.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
