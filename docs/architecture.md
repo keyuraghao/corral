@@ -22,7 +22,7 @@ Corral is one engine behind several surfaces. The engine knows nothing about how
 
 - The **controller** is the only stateful process. It holds the live node registry in memory, because a node is only real while its socket is open, and persists jobs and tasks to SQLite when a database path is given.
 - A **worker** is a dumb executor. It dials into the controller, advertises what it is, pulls task assignments, runs each one through an executor, streams the output back, and reports the result. It holds no job logic of its own, so everything it does is decided by the controller and every environment it creates is disposable.
-- An **executor** is how a worker runs a job. `local` runs on the worker host; `docker` runs in a fresh container that is removed on exit and network-isolated by default. Windows and macOS snapshot-revert VM executors are the planned next worker types.
+- An **executor** is how a worker runs a job. `local` runs on the worker host; `docker` runs in a fresh container that is removed on exit and network-isolated by default; `vm` runs inside a guest VM of any OS, reverting it to a clean snapshot first (pluggable provider plus transport, see below); `agent` hands the job to an independent agent program, so a worker can reason rather than just execute. A worker advertises exactly the executors it can run, and the controller only sends it work it is equipped for.
 
 ## Why workers dial in
 

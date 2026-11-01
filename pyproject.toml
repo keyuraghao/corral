@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "corral"
-version = "0.1.0"
+version = "0.2.0"
 description = "A controller and CLI, MCP server, and web dashboard that herd a fleet of disposable worker nodes across machines and OSes and fan jobs out to them"
 readme = "README.md"
 license = { file = "LICENSE" }

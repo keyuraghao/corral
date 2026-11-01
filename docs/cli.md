@@ -22,6 +22,19 @@ corral worker --controller ws://CONTROLLER:8787 --label linux --label docker [--
 
 Labels are free-form tags a job selector can match. A worker advertises its OS, architecture and whether it has Docker automatically.
 
+A worker offers the local and docker executors by default. Add more:
+
+```sh
+# make the worker an independent agent (any agent program)
+corral worker -c ws://CONTROLLER:8787 --agent-cmd "claude -p" --label agent
+
+# manage a guest VM of any OS: revert to a clean snapshot, run over SSH
+corral worker -c ws://CONTROLLER:8787 --vm-provider virsh --vm-name win11 \
+  --vm-snapshot clean --vm-ssh user@192.168.122.10 --label windows
+```
+
+Providers are `virsh`, `vbox`, `command` (generic templates via `--vm-revert-cmd` / `--vm-start-cmd`), and `loopback`. Omit `--vm-ssh` to run on the worker host itself. The work a job runs can be written in any language; a job is just a command.
+
 ## Submitting work
 
 Fan a command out to every matching node and print each result:

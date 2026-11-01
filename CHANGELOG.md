@@ -4,6 +4,8 @@ All notable changes to Corral are documented here. The format follows Keep a Cha
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-11-01
+
 ### Added
 - The `vm` executor: run a job inside a guest VM of any OS, reverting it to a clean snapshot first. Pluggable providers (virsh, VirtualBox, a generic command template, loopback) manage snapshots and power; pluggable transports (SSH to any guest, or local) run the command. Corral installs nothing and only advertises `vm` on a worker configured with it.
 - The `agent` executor: hand a job to an independent agent program the worker is configured with, so a worker can be a reasoning agent rather than a dumb executor, while still fanning out in parallel across the fleet.
@@ -26,5 +28,6 @@ All notable changes to Corral are documented here. The format follows Keep a Cha
 - Defensive CVE-reproduction workload: reproduce a published advisory in a disposable sandbox from an operator recipe, compare affected versus patched, fetch the public advisory for context, and render a defender's Markdown report.
 - Packaging: wheel and sdist, plus a PyInstaller build script for a portable per-OS binary. CI lints and type-checks, tests on Linux, Windows and macOS across Python 3.10 to 3.13, and does a build check. A release workflow attaches the wheel and the per-OS binaries on a version tag.
 
-[Unreleased]: https://github.com/keyuraghao/corral/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/keyuraghao/corral/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/keyuraghao/corral/releases/tag/v0.2.0
 [0.1.0]: https://github.com/keyuraghao/corral/releases/tag/v0.1.0
