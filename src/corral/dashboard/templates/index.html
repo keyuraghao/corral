@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Corral</title>
+<style>
+  :root {
+    --bg: #0e1116; --panel: #161b22; --border: #2b3340; --fg: #e6edf3; --muted: #8b949e;
+    --cyan: #39c5cf; --green: #3fb950; --red: #f85149; --yellow: #d29922;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: var(--bg); color: var(--fg); }
+  header { padding: 16px 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 12px; }
+  header h1 { font-size: 18px; margin: 0; color: var(--cyan); letter-spacing: 1px; }
+  header .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+  header .dot.live { background: var(--green); box-shadow: 0 0 8px var(--green); }
+  main { padding: 20px; display: grid; gap: 20px; grid-template-columns: 1fr; max-width: 1100px; margin: 0 auto; }
+  section { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+  section h2 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 0; padding: 12px 16px; border-bottom: 1px solid var(--border); }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 9px 16px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; }
+  tr:last-child td { border-bottom: none; }
+  .pill { padding: 1px 8px; border-radius: 999px; font-size: 12px; border: 1px solid var(--border); }
+  .s-done, .s-succeeded, .s-online { color: var(--green); border-color: var(--green); }
+  .s-running, .s-dispatched { color: var(--cyan); border-color: var(--cyan); }
+  .s-failed, .s-timeout { color: var(--red); border-color: var(--red); }
+  .s-no_match, .s-cancelled, .s-pending { color: var(--yellow); border-color: var(--yellow); }
+  .muted { color: var(--muted); }
+  #feed { max-height: 220px; overflow-y: auto; padding: 8px 16px; font-size: 12.5px; }
+  #feed div { padding: 2px 0; color: var(--muted); }
+  #feed b { color: var(--fg); }
+  .empty { padding: 16px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <span class="dot" id="live"></span>
+  <h1>CORRAL</h1>
+  <span class="muted" id="summary"></span>
+</header>
+<main>
+  <section>
+    <h2>Fleet</h2>
+    <div id="nodes"><div class="empty">no workers connected</div></div>
+  </section>
+  <section>
+    <h2>Jobs</h2>
+    <div id="jobs"><div class="empty">no jobs yet</div></div>
+  </section>
+  <section>
+    <h2>Live events</h2>
+    <div id="feed"></div>
+  </section>
+</main>
+<script>
+const esc = s => String(s == null ? "" : s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const pill = s => `<span class="pill s-${esc(s)}">${esc(s)}</span>`;
+
+async function refresh() {
+  try {
+    const [nres, jres] = await Promise.all([fetch("/api/nodes"), fetch("/api/jobs")]);
+    const nodes = (await nres.json()).nodes || [];
+    const jobs = (await jres.json()).jobs || [];
+    document.getElementById("summary").textContent = `${nodes.length} node(s) · ${jobs.length} job(s)`;
+    renderNodes(nodes);
+    renderJobs(jobs);
+  } catch (e) { /* controller may be briefly unavailable */ }
+}
+
+function renderNodes(nodes) {
+  const el = document.getElementById("nodes");
+  if (!nodes.length) { el.innerHTML = '<div class="empty">no workers connected</div>'; return; }
+  let rows = nodes.map(n => {
+    const i = n.info;
+    return `<tr><td>${esc(i.node_id)}</td><td class="muted">${esc(i.hostname)}</td>
+      <td>${esc(i.os)}/${esc(i.arch)}</td><td class="muted">${esc((i.executors||[]).join(","))}</td>
+      <td class="muted">${esc((i.labels||[]).join(",")) || "-"}</td>
+      <td>${pill(n.status)}</td><td>${(n.running_tasks||[]).length}</td></tr>`;
+  }).join("");
+  el.innerHTML = `<table><thead><tr><th>node</th><th>host</th><th>os/arch</th><th>executors</th><th>labels</th><th>status</th><th>running</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function renderJobs(jobs) {
+  const el = document.getElementById("jobs");
+  if (!jobs.length) { el.innerHTML = '<div class="empty">no jobs yet</div>'; return; }
+  let rows = jobs.slice(0, 50).map(j =>
+    `<tr><td>${esc(j.job_id)}</td><td class="muted">${esc(j.spec.name) || "-"}</td>
+     <td class="muted">${esc((j.spec.command||[]).join(" ")).slice(0,60)}</td>
+     <td>${pill(j.state)}</td><td>${(j.task_ids||[]).length}</td></tr>`
+  ).join("");
+  el.innerHTML = `<table><thead><tr><th>job</th><th>name</th><th>command</th><th>state</th><th>tasks</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function connectFeed() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  const ws = new WebSocket(`${proto}://${location.host}/ws/events`);
+  const feed = document.getElementById("feed");
+  const dot = document.getElementById("live");
+  ws.onopen = () => dot.classList.add("live");
+  ws.onclose = () => { dot.classList.remove("live"); setTimeout(connectFeed, 2000); };
+  ws.onmessage = ev => {
+    let m; try { m = JSON.parse(ev.data); } catch { return; }
+    const line = document.createElement("div");
+    const t = new Date().toLocaleTimeString();
+    line.innerHTML = `<span class="muted">${t}</span> <b>${esc(m.event)}</b> ${esc(JSON.stringify(m.data).slice(0, 120))}`;
+    feed.prepend(line);
+    while (feed.childNodes.length > 200) feed.removeChild(feed.lastChild);
+    refresh();
+  };
+}
+
+refresh();
+setInterval(refresh, 4000);
+connectFeed();
+</script>
+</body>
+</html>
