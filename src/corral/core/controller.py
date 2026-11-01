@@ -13,6 +13,7 @@ worker without blocking on another.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from collections.abc import Awaitable, Callable
 
 from . import protocol as P
@@ -72,10 +73,9 @@ class Controller:
 
     async def _emit(self, event: str, payload: dict) -> None:
         for sink in list(self._listeners):
-            try:
+            # A broken live-view listener must never break the controller.
+            with contextlib.suppress(Exception):
                 await sink(event, payload)
-            except Exception:  # noqa: BLE001 - a broken listener must not break the controller
-                pass
 
     # ----- worker lifecycle -----
 

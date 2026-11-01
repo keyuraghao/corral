@@ -28,14 +28,12 @@ try:
     from mcp.server.mcpserver import MCPServer as _McpServer  # mcp >= 2.0
 except ImportError:
     try:
-        from mcp.server.fastmcp import FastMCP as _McpServer  # mcp >= 1.6, < 2.0
+        from mcp.server.fastmcp import FastMCP as _McpServer  # type: ignore[attr-defined,no-redef]  # mcp >= 1.6, < 2.0
     except ImportError as exc:  # pragma: no cover - exercised only without the mcp extra
-        raise SystemExit(
-            "The MCP server needs the 'mcp' extra. Install it with: uv pip install -e '.[mcp]'"
-        ) from exc
+        raise SystemExit("The MCP server needs the 'mcp' extra. Install it with: uv pip install -e '.[mcp]'") from exc
 
 
-def build_server(api: str) -> "_McpServer":
+def build_server(api: str) -> _McpServer:
     client = ControllerClient(base_url=api)
     mcp = _McpServer("corral")
 
@@ -113,7 +111,19 @@ def build_server(api: str) -> "_McpServer":
     async def list_jobs() -> dict[str, Any]:
         """List recent jobs, newest first, with their state and how many nodes each fanned out to."""
         jobs = await client.jobs()
-        return {"result": {"jobs": [{"job_id": j["job_id"], "name": j["spec"].get("name"), "state": j["state"], "tasks": len(j.get("task_ids", []))} for j in jobs]}}
+        return {
+            "result": {
+                "jobs": [
+                    {
+                        "job_id": j["job_id"],
+                        "name": j["spec"].get("name"),
+                        "state": j["state"],
+                        "tasks": len(j.get("task_ids", [])),
+                    }
+                    for j in jobs
+                ]
+            }
+        }
 
     @mcp.tool()
     async def cancel_job(job_id: str) -> dict[str, Any]:
@@ -132,13 +142,15 @@ def _summarise(view: dict | None) -> dict[str, Any]:
     out = {"job_id": job["job_id"], "state": job["state"], "name": job["spec"].get("name"), "nodes": []}
     for t in view.get("tasks", []):
         res = t.get("result", {})
-        out["nodes"].append({
-            "node_id": t["node_id"],
-            "state": t["state"],
-            "exit_code": res.get("exit_code"),
-            "error": res.get("error") or None,
-            "output": "\n".join(line for _, line in t.get("log", [])),
-        })
+        out["nodes"].append(
+            {
+                "node_id": t["node_id"],
+                "state": t["state"],
+                "exit_code": res.get("exit_code"),
+                "error": res.get("error") or None,
+                "output": "\n".join(line for _, line in t.get("log", [])),
+            }
+        )
     return out
 
 
@@ -153,9 +165,9 @@ def serve(transport: str = "stdio", host: str = "127.0.0.1", port: int = 8765, a
         if settings is not None:
             settings.host = host
             settings.port = port
-            mcp.run(transport=transport)
+            mcp.run(transport=transport)  # type: ignore[call-overload]
         else:
-            mcp.run(transport=transport, host=host, port=port)
+            mcp.run(transport=transport, host=host, port=port)  # type: ignore[call-overload]
     else:
         raise SystemExit(f"unknown transport: {transport!r}")
 
@@ -167,7 +179,9 @@ def main() -> None:
     ap.add_argument("--transport", default="stdio", choices=["stdio", "streamable-http", "sse"])
     ap.add_argument("--host", default="127.0.0.1")
     ap.add_argument("--port", type=int, default=8765)
-    ap.add_argument("--api", default=None, help="Controller API base URL (default: $CORRAL_API or http://127.0.0.1:8787)")
+    ap.add_argument(
+        "--api", default=None, help="Controller API base URL (default: $CORRAL_API or http://127.0.0.1:8787)"
+    )
     args = ap.parse_args()
     serve(transport=args.transport, host=args.host, port=args.port, api=args.api)
 

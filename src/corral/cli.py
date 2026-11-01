@@ -43,7 +43,9 @@ def _version_callback(value: bool) -> None:
 
 @app.callback()
 def _root(
-    version: bool = typer.Option(False, "--version", callback=_version_callback, is_eager=True, help="Show the version and exit."),
+    version: bool = typer.Option(
+        False, "--version", callback=_version_callback, is_eager=True, help="Show the version and exit."
+    ),
 ) -> None:
     pass
 
@@ -65,11 +67,13 @@ def controller(
 
     application = build_app(with_dashboard=dashboard)
     where = f"http://{host}:{port}"
-    console.print(Panel.fit(
-        f"[bold]Corral controller[/bold]\nAPI    {where}\nWorker ws://{host}:{port}/ws/worker"
-        + (f"\nBoard  {where}/" if dashboard else ""),
-        border_style="cyan",
-    ))
+    console.print(
+        Panel.fit(
+            f"[bold]Corral controller[/bold]\nAPI    {where}\nWorker ws://{host}:{port}/ws/worker"
+            + (f"\nBoard  {where}/" if dashboard else ""),
+            border_style="cyan",
+        )
+    )
     uvicorn.run(application, host=host, port=port, log_level="warning")
 
 
@@ -78,7 +82,9 @@ def controller(
 
 @app.command()
 def worker(
-    controller: str = typer.Option("ws://127.0.0.1:8787", "--controller", "-c", help="Controller URL (ws:// or http://)."),
+    controller: str = typer.Option(
+        "ws://127.0.0.1:8787", "--controller", "-c", help="Controller URL (ws:// or http://)."
+    ),
     label: list[str] = typer.Option([], "--label", "-l", help="A tag a job selector can match. Repeatable."),
     node_id: str = typer.Option(None, "--node-id", help="Stable id for this worker. Default is random."),
     docker_bin: str = typer.Option("docker", help="The docker executable to use."),
@@ -135,7 +141,7 @@ def run(
 
     try:
         view = asyncio.run(_go())
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         console.print(f"[red]could not reach controller at {api}:[/red] {exc}")
         raise typer.Exit(1) from exc
     _print_job_view(view, show_logs=True)
@@ -151,7 +157,7 @@ def nodes(api: str = typer.Option("http://127.0.0.1:8787", help="Controller API 
     client = ControllerClient(base_url=api)
     try:
         rows = asyncio.run(client.nodes())
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         console.print(f"[red]could not reach controller at {api}:[/red] {exc}")
         raise typer.Exit(1) from exc
     if not rows:
@@ -184,7 +190,7 @@ def jobs(api: str = typer.Option("http://127.0.0.1:8787", help="Controller API b
     client = ControllerClient(base_url=api)
     try:
         rows = asyncio.run(client.jobs())
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         console.print(f"[red]could not reach controller at {api}:[/red] {exc}")
         raise typer.Exit(1) from exc
     if not rows:
@@ -207,7 +213,7 @@ def job(job_id: str, api: str = typer.Option("http://127.0.0.1:8787", help="Cont
     client = ControllerClient(base_url=api)
     try:
         view = asyncio.run(client.job(job_id))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         console.print(f"[red]could not reach controller at {api}:[/red] {exc}")
         raise typer.Exit(1) from exc
     _print_job_view(view, show_logs=True)
@@ -220,7 +226,7 @@ def cancel(job_id: str, api: str = typer.Option("http://127.0.0.1:8787", help="C
     client = ControllerClient(base_url=api)
     try:
         res = asyncio.run(client.cancel(job_id))
-    except Exception as exc:  # noqa: BLE001
+    except Exception as exc:
         console.print(f"[red]could not reach controller at {api}:[/red] {exc}")
         raise typer.Exit(1) from exc
     console.print("[green]cancelled[/green]" if res.get("cancelled") else "[yellow]no such job[/yellow]")
@@ -250,10 +256,12 @@ def _print_job_view(view: dict, show_logs: bool = False) -> None:
     job = view["job"]
     tasks = view.get("tasks", [])
     state = job["state"]
-    console.print(Panel.fit(
-        f"[bold]{job['job_id']}[/bold]  {job['spec'].get('name') or ''}\nstate: {state}   tasks: {len(tasks)}",
-        border_style="cyan" if state in ("done",) else "yellow",
-    ))
+    console.print(
+        Panel.fit(
+            f"[bold]{job['job_id']}[/bold]  {job['spec'].get('name') or ''}\nstate: {state}   tasks: {len(tasks)}",
+            border_style="cyan" if state in ("done",) else "yellow",
+        )
+    )
     if state == "no_match":
         console.print("[yellow]no connected node matched this job's selector[/yellow]")
         return

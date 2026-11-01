@@ -44,31 +44,31 @@ class Envelope(BaseModel):
 class Message(BaseModel):
     """Base for a typed payload. `MSG_TYPE` is the string that appears in the envelope."""
 
-    MSG_TYPE: Literal["_base"] = "_base"
+    MSG_TYPE: str = "_base"
 
 
 # ----- worker -> controller -----
 
 
 class Hello(Message):
-    MSG_TYPE: Literal["hello"] = "hello"
+    MSG_TYPE: str = "hello"
     protocol: int = PROTOCOL_VERSION
     info: NodeInfo
 
 
 class Heartbeat(Message):
-    MSG_TYPE: Literal["heartbeat"] = "heartbeat"
+    MSG_TYPE: str = "heartbeat"
 
 
 class TaskLog(Message):
-    MSG_TYPE: Literal["task_log"] = "task_log"
+    MSG_TYPE: str = "task_log"
     task_id: str
     stream: Literal["stdout", "stderr"]
     line: str
 
 
 class TaskUpdate(Message):
-    MSG_TYPE: Literal["task_update"] = "task_update"
+    MSG_TYPE: str = "task_update"
     task_id: str
     state: TaskState
     result: TaskResult | None = None
@@ -78,25 +78,25 @@ class TaskUpdate(Message):
 
 
 class Welcome(Message):
-    MSG_TYPE: Literal["welcome"] = "welcome"
+    MSG_TYPE: str = "welcome"
     node_id: str
     protocol: int = PROTOCOL_VERSION
 
 
 class TaskAssignment(Message):
-    MSG_TYPE: Literal["task"] = "task"
+    MSG_TYPE: str = "task"
     task_id: str
     job_id: str
     spec: JobSpec
 
 
 class Cancel(Message):
-    MSG_TYPE: Literal["cancel"] = "cancel"
+    MSG_TYPE: str = "cancel"
     task_id: str
 
 
 class Ping(Message):
-    MSG_TYPE: Literal["ping"] = "ping"
+    MSG_TYPE: str = "ping"
 
 
 # Registry so a received envelope can be turned back into the right typed model.

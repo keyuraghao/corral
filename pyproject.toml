@@ -72,13 +72,14 @@ src = ["src", "tests"]
 [tool.ruff.lint]
 select = ["E", "F", "W", "I", "N", "UP", "B", "C4", "SIM", "RUF", "PL"]
 ignore = [
-  "PLR0913", "PLR2004", "PLR0912", "PLR0915", "PLR0911",
-  "RUF012", "PLC0415",
+  "PLR0913", "PLR0917", "PLR2004", "PLR0912", "PLR0915", "PLR0911",
+  "RUF012", "PLC0415", "N812",
 ]
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["PLR", "S101", "E501"]
 "scripts/*" = ["E402", "E501"]
+"src/corral/cli.py" = ["B008"]
 "src/corral/mcp/server.py" = ["E501"]
 "src/corral/dashboard/*" = ["E501"]
 
@@ -92,6 +93,7 @@ check_untyped_defs = true
 testpaths = ["tests"]
 addopts = "-ra -q"
 asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
 
 [tool.coverage.run]
 source = ["corral"]

@@ -12,6 +12,7 @@ controller, and every environment it creates is disposable.
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import platform
 import shutil
 import socket
@@ -31,10 +32,11 @@ def detect_docker(docker_bin: str = "docker") -> bool:
     if shutil.which(docker_bin) is None:
         return False
     try:
-        out = subprocess.run(  # noqa: S603
+        out = subprocess.run(
             [docker_bin, "version", "--format", "{{.Server.Version}}"],
             capture_output=True,
             timeout=8,
+            check=False,
         )
         return out.returncode == 0
     except (subprocess.SubprocessError, OSError):
@@ -79,7 +81,8 @@ class Worker:
         self.reconnect_max_s = reconnect_max_s
         self.executors: dict[Executor, BaseExecutor] = default_executors(docker_bin=docker_bin)
         self._running: dict[str, RunHandle] = {}
-        self._ws: websockets.WebSocketClientProtocol | None = None
+        self._bg: set[asyncio.Task] = set()
+        self._ws: websockets.ClientConnection | None = None
 
     def _ws_endpoint(self) -> str:
         base = self.controller_url
@@ -110,7 +113,8 @@ class Worker:
             self._ws = ws
             info = gather_node_info(self.node_id, self.labels, self.docker_bin)
             await ws.send(P.encode(P.Hello(info=info)))
-            print(f"[worker {self.node_id}] connected to {endpoint} as {info.os}/{info.arch}, executors={[e.value for e in info.executors]}")
+            execs = ",".join(e.value for e in info.executors)
+            print(f"[worker {self.node_id}] connected to {endpoint} as {info.os}/{info.arch}, executors={execs}")
             hb = asyncio.ensure_future(self._heartbeat_loop(ws))
             try:
                 async for raw in ws:
@@ -119,7 +123,7 @@ class Worker:
                 hb.cancel()
                 self._ws = None
 
-    async def _heartbeat_loop(self, ws: websockets.WebSocketClientProtocol) -> None:
+    async def _heartbeat_loop(self, ws: websockets.ClientConnection) -> None:
         try:
             while True:
                 await asyncio.sleep(self.heartbeat_s)
@@ -127,7 +131,7 @@ class Worker:
         except (asyncio.CancelledError, websockets.WebSocketException):
             return
 
-    async def _handle(self, ws: websockets.WebSocketClientProtocol, raw: str | bytes) -> None:
+    async def _handle(self, ws: websockets.ClientConnection, raw: str | bytes) -> None:
         try:
             msg = P.decode(raw)
         except ValueError as exc:
@@ -138,39 +142,48 @@ class Worker:
         elif isinstance(msg, P.Ping):
             await ws.send(P.encode(P.Heartbeat()))
         elif isinstance(msg, P.TaskAssignment):
-            asyncio.ensure_future(self._run_task(ws, msg))
+            # Keep a reference so the task is not garbage collected mid-run; drop it when done.
+            bg = asyncio.ensure_future(self._run_task(ws, msg))
+            self._bg.add(bg)
+            bg.add_done_callback(self._bg.discard)
         elif isinstance(msg, P.Cancel):
             handle = self._running.get(msg.task_id)
             if handle is not None:
                 await handle.cancel()
 
-    async def _run_task(self, ws: websockets.WebSocketClientProtocol, assignment: P.TaskAssignment) -> None:
+    async def _run_task(self, ws: websockets.ClientConnection, assignment: P.TaskAssignment) -> None:
         task_id = assignment.task_id
         spec = assignment.spec
         executor = self.executors.get(spec.executor)
         if executor is None:
-            await ws.send(P.encode(P.TaskUpdate(
-                task_id=task_id,
-                state=TaskState.FAILED,
-                result=TaskResult(error=f"no executor for {spec.executor.value!r}"),
-            )))
+            await ws.send(
+                P.encode(
+                    P.TaskUpdate(
+                        task_id=task_id,
+                        state=TaskState.FAILED,
+                        result=TaskResult(error=f"no executor for {spec.executor.value!r}"),
+                    )
+                )
+            )
             return
 
         async def sink(stream: str, line: str) -> None:
-            try:
+            with contextlib.suppress(websockets.WebSocketException):
                 await ws.send(P.encode(P.TaskLog(task_id=task_id, stream=stream, line=line)))  # type: ignore[arg-type]
-            except websockets.WebSocketException:
-                pass
 
         await ws.send(P.encode(P.TaskUpdate(task_id=task_id, state=TaskState.RUNNING)))
         try:
             handle = await executor.start(task_id, spec, sink)
         except (OSError, ValueError) as exc:
-            await ws.send(P.encode(P.TaskUpdate(
-                task_id=task_id,
-                state=TaskState.FAILED,
-                result=TaskResult(error=f"failed to start: {exc}"),
-            )))
+            await ws.send(
+                P.encode(
+                    P.TaskUpdate(
+                        task_id=task_id,
+                        state=TaskState.FAILED,
+                        result=TaskResult(error=f"failed to start: {exc}"),
+                    )
+                )
+            )
             return
         self._running[task_id] = handle
         try:

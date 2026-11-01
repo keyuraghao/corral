@@ -59,9 +59,7 @@ class JobState(str, Enum):
 
 
 # Terminal task states, kept in one place so the controller and the reporting code agree.
-TERMINAL_TASK_STATES = frozenset(
-    {TaskState.SUCCEEDED, TaskState.FAILED, TaskState.CANCELLED, TaskState.TIMEOUT}
-)
+TERMINAL_TASK_STATES = frozenset({TaskState.SUCCEEDED, TaskState.FAILED, TaskState.CANCELLED, TaskState.TIMEOUT})
 
 
 class NodeInfo(BaseModel):
@@ -165,6 +163,4 @@ def selector_matches(spec: JobSpec, node: Node) -> bool:
         return False
     if spec.executor not in info.executors:
         return False
-    if spec.select_labels and not set(spec.select_labels).issubset(set(info.labels)):
-        return False
-    return True
+    return not (spec.select_labels and not set(spec.select_labels).issubset(set(info.labels)))

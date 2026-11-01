@@ -147,7 +147,9 @@ class DockerExecutor(BaseExecutor):
 
         async def _kill_container() -> None:
             killer = await asyncio.create_subprocess_exec(
-                self.docker_bin, "kill", name,
+                self.docker_bin,
+                "kill",
+                name,
                 stdout=asyncio.subprocess.DEVNULL,
                 stderr=asyncio.subprocess.DEVNULL,
             )
