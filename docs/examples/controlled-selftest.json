@@ -1,0 +1,10 @@
+{
+  "cve_id": "CVE-0000-TEST",
+  "summary": "A controlled self-test. The vulnerable condition is simply that the image is Alpine, which the probe confirms by exiting 0. Use it to check the CVE workflow end to end without pulling anything exotic.",
+  "affected_image": "alpine:3.20",
+  "probe": ["test -f /etc/alpine-release"],
+  "probe_shell": true,
+  "network": false,
+  "select_labels": ["cve"],
+  "timeout_s": 60
+}

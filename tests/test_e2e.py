@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 
+from _util import py_print
 from corral.core.client import ControllerClient
 from corral.core.models import Executor, JobSpec
 from corral.core.worker import Worker
@@ -35,7 +36,7 @@ async def test_single_worker_runs_a_local_job(running_controller):
     _w, task = await _start_worker(rc.ws, ["test"], "solo")
     try:
         await _wait_for_nodes(client, 1)
-        spec = JobSpec(command=["echo", "fleet-up"], executor=Executor.LOCAL, select_executor=Executor.LOCAL)
+        spec = JobSpec(command=py_print("fleet-up"), executor=Executor.LOCAL, select_executor=Executor.LOCAL)
         view = await client.submit(spec, wait=True, timeout=20)
         assert view["job"]["state"] == "done"
         tasks = view["tasks"]
@@ -55,7 +56,7 @@ async def test_job_fans_out_to_every_matching_node(running_controller):
     try:
         await _wait_for_nodes(client, 2)
         spec = JobSpec(
-            command=["sh", "-c", "echo from $(hostname) ok"],
+            command=py_print("ran"),
             executor=Executor.LOCAL,
             select_executor=Executor.LOCAL,
             select_labels=["test"],
@@ -81,7 +82,7 @@ async def test_selector_can_target_a_subset(running_controller):
     try:
         await _wait_for_nodes(client, 2)
         spec = JobSpec(
-            command=["echo", "hi"], executor=Executor.LOCAL, select_executor=Executor.LOCAL, select_labels=["beta"]
+            command=py_print("hi"), executor=Executor.LOCAL, select_executor=Executor.LOCAL, select_labels=["beta"]
         )
         view = await client.submit(spec, wait=True, timeout=20)
         tasks = view["tasks"]
@@ -99,7 +100,7 @@ async def test_no_match_is_reported(running_controller):
     try:
         await _wait_for_nodes(client, 1)
         spec = JobSpec(
-            command=["echo", "hi"],
+            command=py_print("hi"),
             executor=Executor.LOCAL,
             select_executor=Executor.LOCAL,
             select_labels=["does-not-exist"],

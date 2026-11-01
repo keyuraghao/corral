@@ -1,0 +1,11 @@
+{
+  "cve_id": "CVE-2014-6271",
+  "summary": "Shellshock. The probe is the standard defensive detection check administrators ran against their own bash: a crafted environment variable whose value is a function definition followed by a command. A vulnerable bash runs the trailing command while importing the function. The probe prints a marker and exits 0 only when that happens, so it confirms exposure without attacking anything external.",
+  "affected_image": "bash:4.3",
+  "patched_image": "bash:5.2",
+  "probe": ["env x='() { :;}; echo VULNERABLE' bash -c 'exit 0' | grep -q VULNERABLE"],
+  "probe_shell": true,
+  "network": false,
+  "select_labels": ["cve"],
+  "timeout_s": 120
+}

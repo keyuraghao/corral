@@ -7,6 +7,7 @@ worker, and reads the result back the way an agent would.
 
 from __future__ import annotations
 
+from _util import py_print
 from corral.core.client import ControllerClient
 from corral.core.worker import Worker
 from corral.mcp.server import build_server
@@ -37,7 +38,7 @@ async def test_mcp_run_tool_drives_the_fleet(running_controller):
             await asyncio.sleep(0.1)
 
         server = build_server(rc.api)
-        result = await server.call_tool("run", {"command": ["echo", "via-mcp"], "executor": "local"})
+        result = await server.call_tool("run", {"command": py_print("via-mcp"), "executor": "local"})
         # call_tool returns (content, structured) in mcp 2.x; be tolerant of shape.
         structured = _extract_structured(result)
         payload = structured.get("result", structured)

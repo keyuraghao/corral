@@ -46,6 +46,7 @@ dev = [
   "ruff>=0.5",
   "mypy>=1.10",
   "build>=1.2",
+  "pyinstaller>=6.6",
 ]
 
 [project.urls]

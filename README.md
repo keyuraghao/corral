@@ -1,11 +1,18 @@
 <div align="center">
 
-<img src="docs/screenshots/logo.png" alt="Corral" width="120" />
+<img src="docs/screenshots/logo.svg" alt="Corral" width="120" />
 
 <h1 align="center">Corral</h1>
 
 <p align="center">
 A <b>controller</b> that herds a fleet of disposable <b>worker nodes</b> across machines and operating systems, and fans a job out to every node that matches. Drive it from a <b>CLI</b>, from an <b>MCP server</b> so an AI agent can run the fleet, or from a <b>web dashboard</b>. Built for work that a single session on a single machine cannot do: cross-platform testing, and reproducing a published vulnerability inside a disposable, network-isolated sandbox.
+</p>
+
+<p align="center">
+<a href="https://github.com/keyuraghao/corral/actions/workflows/ci.yml"><img src="https://github.com/keyuraghao/corral/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+<img src="https://img.shields.io/badge/python-3.10%20--%203.13-blue" alt="Python" />
+<img src="https://img.shields.io/badge/platforms-Linux%20%7C%20Windows%20%7C%20macOS-informational" alt="Platforms" />
+<img src="https://img.shields.io/badge/license-MIT-green" alt="License" />
 </p>
 
 </div>
@@ -73,7 +80,11 @@ See [SECURITY.md](SECURITY.md).
 
 ## Docs
 
-Per-surface docs live under [`docs/`](docs/): the CLI, the [MCP server](docs/mcp.md), the worker protocol, and the CVE-reproduction workflow design.
+- [Architecture](docs/architecture.md) - the controller, workers, executors, and how fan-out works.
+- [CLI](docs/cli.md) - every command and its options.
+- [MCP server](docs/mcp.md) - transports, registering with agents, and the tool list.
+- [Worker protocol](docs/protocol.md) - the WebSocket messages and the connection lifecycle.
+- [CVE reproduction](docs/cve.md) - the defensive workflow and the recipe format, with [examples](docs/examples/).
 
 ## License
 

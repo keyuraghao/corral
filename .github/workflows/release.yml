@@ -1,0 +1,65 @@
+name: Release
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  wheel:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv python install 3.12
+      - run: uv build
+      - uses: actions/upload-artifact@v4
+        with: { name: wheel, path: dist/* }
+
+  binaries:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: ubuntu-22.04, script: "bash packaging/build.sh", artifact: linux }
+          - { os: windows-latest, script: "powershell -ExecutionPolicy Bypass -File packaging/build.ps1", artifact: windows }
+          - { os: macos-14, script: "bash packaging/build.sh", artifact: macos, experimental: true }
+    runs-on: ${{ matrix.os }}
+    continue-on-error: ${{ matrix.experimental || false }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv python install 3.12
+      - run: uv sync --all-extras
+      - run: uv run ${{ matrix.script }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            dist/*.tar.gz
+            dist/*.tar.gz.sha256
+            dist/*.zip
+            dist/*.zip.sha256
+          if-no-files-found: ignore
+
+  release:
+    needs: [wheel, binaries]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with: { path: artifacts }
+      - name: Collect release notes from CHANGELOG
+        run: |
+          python - <<'PY' > notes.md
+          import re, pathlib
+          tag = "${{ github.ref_name }}".lstrip("v")
+          text = pathlib.Path("CHANGELOG.md").read_text(encoding="utf-8")
+          m = re.search(rf"## \[{re.escape(tag)}\].*?(?=\n## |\Z)", text, re.S)
+          print(m.group(0).strip() if m else f"Release {tag}")
+          PY
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: notes.md
+          files: artifacts/**/*

@@ -49,7 +49,8 @@ async def _pump(stream: asyncio.StreamReader | None, name: str, sink: LogSink, b
         raw = await stream.readline()
         if not raw:
             break
-        line = raw.decode("utf-8", errors="replace").rstrip("\n")
+        # Strip the trailing newline, tolerating Windows CRLF so a line reads the same on every OS.
+        line = raw.decode("utf-8", errors="replace").rstrip("\r\n")
         buf.append(line)
         await sink(name, line)
 

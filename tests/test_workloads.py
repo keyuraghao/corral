@@ -11,6 +11,7 @@ import asyncio
 
 import pytest
 
+from _util import py_exit
 from corral.core.client import ControllerClient
 from corral.core.models import Executor
 from corral.core.worker import Worker, detect_docker
@@ -44,7 +45,7 @@ async def test_matrix_all_pass(running_controller):
     _w, t = await _worker(rc.ws, "tm-a")
     try:
         await _await_nodes(client, 1)
-        result = await run_test_matrix(client, ["exit 0"], executor=Executor.LOCAL, shell=True, network=False)
+        result = await run_test_matrix(client, py_exit(0), executor=Executor.LOCAL, shell=False, network=False)
         assert result.passed is True
         assert result.passes == result.total == 1
     finally:
@@ -57,7 +58,7 @@ async def test_matrix_detects_failure(running_controller):
     _w, t = await _worker(rc.ws, "tm-b")
     try:
         await _await_nodes(client, 1)
-        result = await run_test_matrix(client, ["exit 1"], executor=Executor.LOCAL, shell=True, network=False)
+        result = await run_test_matrix(client, py_exit(1), executor=Executor.LOCAL, shell=False, network=False)
         assert result.passed is False
         assert result.passes == 0
     finally:

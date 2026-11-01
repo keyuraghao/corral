@@ -12,6 +12,7 @@ import httpx
 import pytest
 import uvicorn
 
+from _util import py_print
 from corral.core.client import ControllerClient
 from corral.core.controller import Controller
 from corral.core.models import Executor, JobSpec
@@ -87,7 +88,7 @@ async def test_worker_with_token_registers(secured_controller):
             await asyncio.sleep(0.1)
         nodes = await client.nodes()
         assert len(nodes) == 1
-        spec = JobSpec(command=["echo", "ok"], executor=Executor.LOCAL, select_executor=Executor.LOCAL)
+        spec = JobSpec(command=py_print("ok"), executor=Executor.LOCAL, select_executor=Executor.LOCAL)
         view = await client.submit(spec, wait=True, timeout=15)
         assert view["job"]["state"] == "done"
     finally:
