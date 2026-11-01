@@ -32,3 +32,28 @@ def py_sleep(seconds: float) -> list[str]:
 
 def py_stderr(text: str) -> list[str]:
     return py(f"import sys; print({text!r}, file=sys.stderr)")
+
+
+def docker_linux_available(docker_bin: str = "docker") -> bool:
+    """True only when a docker daemon is reachable and runs Linux containers.
+
+    The docker executor builds Linux images (alpine, python:slim), so a Windows daemon in
+    Windows-container mode does not count. GitHub's Windows runners are exactly that case, which is why
+    a plain "is docker present" check is not enough to gate these tests.
+    """
+
+    import shutil
+    import subprocess
+
+    if shutil.which(docker_bin) is None:
+        return False
+    try:
+        out = subprocess.run(
+            [docker_bin, "version", "--format", "{{.Server.Os}}"],
+            capture_output=True,
+            timeout=8,
+            check=False,
+        )
+        return out.returncode == 0 and out.stdout.decode(errors="replace").strip().lower() == "linux"
+    except (subprocess.SubprocessError, OSError):
+        return False

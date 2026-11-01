@@ -11,15 +11,15 @@ import asyncio
 
 import pytest
 
-from _util import py_exit
+from _util import docker_linux_available, py_exit
 from corral.core.client import ControllerClient
 from corral.core.models import Executor
-from corral.core.worker import Worker, detect_docker
+from corral.core.worker import Worker
 from corral.workloads.cve import CveRecipe, CveReport, ProbeOutcome, render_markdown, reproduce
 from corral.workloads.testrunner import run_test_matrix
 
-_DOCKER = detect_docker()
-skip_no_docker = pytest.mark.skipif(not _DOCKER, reason="docker not available")
+_DOCKER = docker_linux_available()
+skip_no_docker = pytest.mark.skipif(not _DOCKER, reason="docker with linux containers not available")
 
 
 async def _worker(ws_url: str, node_id: str, labels=None):

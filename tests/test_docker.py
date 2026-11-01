@@ -7,12 +7,12 @@ from __future__ import annotations
 
 import pytest
 
+from _util import docker_linux_available
 from corral.core.executors import DockerExecutor
 from corral.core.models import JobSpec, TaskState
-from corral.core.worker import detect_docker
 
-_DOCKER = detect_docker()
-skip_no_docker = pytest.mark.skipif(not _DOCKER, reason="docker not available")
+_DOCKER = docker_linux_available()
+skip_no_docker = pytest.mark.skipif(not _DOCKER, reason="docker with linux containers not available")
 
 IMAGE = "alpine:3.20"
 
