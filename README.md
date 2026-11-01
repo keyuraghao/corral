@@ -25,10 +25,10 @@ Corral splits the problem. A long-running **controller** holds a registry of **w
 
 ## Status
 
-Alpha, built milestone by milestone.
+Alpha, built milestone by milestone, with green CI on Linux, Windows and macOS.
 
-- **Working now:** the controller, the WebSocket worker protocol, the `local` and `docker` executors, job fan-out across every matching node, live log streaming, and the CLI and MCP surfaces over all of it.
-- **Scaffolded next:** the read-only web dashboard, snapshot-revert VM workers for Windows and macOS, and the defensive CVE-reproduction job template. These are present as clearly marked stubs with a design, not finished features.
+- **Working now:** the controller, the WebSocket worker protocol, the `local` and `docker` executors, job fan-out across every matching node, live log streaming, optional SQLite persistence and shared-token auth, the read-only web dashboard, the cross-platform test runner, the defensive CVE-reproduction workload, and all three surfaces (CLI, MCP, dashboard) over the lot.
+- **Next:** snapshot-revert VM workers for Windows and macOS targets, so a job can land on a real Windows or macOS environment and not only a Linux container. The worker and executor interfaces are built to take a new executor type without touching the controller.
 
 See [CHANGELOG.md](CHANGELOG.md) for what landed when.
 
