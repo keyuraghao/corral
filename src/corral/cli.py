@@ -58,19 +58,33 @@ def controller(
     host: str = typer.Option("127.0.0.1", help="Address to bind. Keep on localhost unless you add your own auth."),
     port: int = typer.Option(8787, help="Port to bind."),
     dashboard: bool = typer.Option(False, "--dashboard", help="Also serve the read-only web dashboard at /."),
+    db: str = typer.Option(
+        None, "--db", help="SQLite file to persist jobs and tasks. Omit to keep them in memory only."
+    ),
+    token: str = typer.Option(
+        None,
+        "--token",
+        envvar="CORRAL_TOKEN",
+        help="Shared token required of workers and API clients. Omit to run open on localhost.",
+    ),
 ) -> None:
     """Start the controller daemon."""
 
     import uvicorn
 
+    from .core.controller import Controller
     from .core.server import build_app
+    from .core.store import JobStore
 
-    application = build_app(with_dashboard=dashboard)
+    store = JobStore(db) if db else None
+    application = build_app(Controller(store=store), with_dashboard=dashboard, auth_token=token)
     where = f"http://{host}:{port}"
     console.print(
         Panel.fit(
             f"[bold]Corral controller[/bold]\nAPI    {where}\nWorker ws://{host}:{port}/ws/worker"
-            + (f"\nBoard  {where}/" if dashboard else ""),
+            + (f"\nBoard  {where}/" if dashboard else "")
+            + (f"\nStore  {db}" if db else "\nStore  memory only")
+            + ("\nAuth   token required" if token else "\nAuth   open (localhost)"),
             border_style="cyan",
         )
     )
@@ -88,12 +102,18 @@ def worker(
     label: list[str] = typer.Option([], "--label", "-l", help="A tag a job selector can match. Repeatable."),
     node_id: str = typer.Option(None, "--node-id", help="Stable id for this worker. Default is random."),
     docker_bin: str = typer.Option("docker", help="The docker executable to use."),
+    token: str = typer.Option(
+        None,
+        "--token",
+        envvar="CORRAL_TOKEN",
+        help="Shared token the controller requires. Omit when the controller runs open.",
+    ),
 ) -> None:
     """Start a worker that dials into a controller and runs what it is told."""
 
     from .core.worker import Worker
 
-    w = Worker(controller_url=controller, labels=list(label), node_id=node_id, docker_bin=docker_bin)
+    w = Worker(controller_url=controller, labels=list(label), node_id=node_id, docker_bin=docker_bin, token=token)
     console.print(f"[cyan]worker[/cyan] starting, dialing {controller} (labels: {', '.join(label) or 'none'})")
     try:
         asyncio.run(w.run())

@@ -72,6 +72,7 @@ class Worker:
         docker_bin: str = "docker",
         heartbeat_s: float = 15.0,
         reconnect_max_s: float = 30.0,
+        token: str | None = None,
     ):
         self.controller_url = controller_url.rstrip("/")
         self.node_id = node_id or f"node_{uuid.uuid4().hex[:8]}"
@@ -79,6 +80,7 @@ class Worker:
         self.docker_bin = docker_bin
         self.heartbeat_s = heartbeat_s
         self.reconnect_max_s = reconnect_max_s
+        self.token = token
         self.executors: dict[Executor, BaseExecutor] = default_executors(docker_bin=docker_bin)
         self._running: dict[str, RunHandle] = {}
         self._bg: set[asyncio.Task] = set()
@@ -92,6 +94,8 @@ class Worker:
             base = "wss://" + base[len("https://") :]
         if not base.endswith("/ws/worker"):
             base = base + "/ws/worker"
+        if self.token:
+            base = f"{base}?token={self.token}"
         return base
 
     async def run(self) -> None:

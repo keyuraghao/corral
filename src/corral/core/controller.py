@@ -31,6 +31,7 @@ from .models import (
     now,
     selector_matches,
 )
+from .store import JobStore
 
 # How long without any message before a node is considered stale and dropped from matching.
 NODE_STALE_AFTER_S = 45.0
@@ -53,12 +54,27 @@ EventSink = Callable[[str, dict], Awaitable[None]]
 
 
 class Controller:
-    def __init__(self) -> None:
+    def __init__(self, store: JobStore | None = None) -> None:
         self.nodes: dict[str, WorkerConn] = {}
         self.jobs: dict[str, Job] = {}
         self.tasks: dict[str, Task] = {}
         self._listeners: list[EventSink] = []
         self._lock = asyncio.Lock()
+        self.store = store
+        if store is not None:
+            # Replay history so a restarted controller still answers for past jobs.
+            for job in store.load_jobs():
+                self.jobs[job.job_id] = job
+            for task in store.load_tasks():
+                self.tasks[task.task_id] = task
+
+    def _persist_job(self, job: Job) -> None:
+        if self.store is not None:
+            self.store.save_job(job)
+
+    def _persist_task(self, task: Task) -> None:
+        if self.store is not None:
+            self.store.save_task(task)
 
     # ----- event fan-out to live views -----
 
@@ -121,6 +137,7 @@ class Controller:
         if not matched:
             job.state = JobState.NO_MATCH
             self.jobs[job.job_id] = job
+            self._persist_job(job)
             await self._emit("job_submitted", {"job": job.model_dump(mode="json"), "matched": 0})
             return job
 
@@ -128,9 +145,11 @@ class Controller:
             task = Task(job_id=job.job_id, node_id=node.info.node_id, spec=spec)
             self.tasks[task.task_id] = task
             job.task_ids.append(task.task_id)
+            self._persist_task(task)
 
         job.state = JobState.RUNNING
         self.jobs[job.job_id] = job
+        self._persist_job(job)
         await self._emit("job_submitted", {"job": job.model_dump(mode="json"), "matched": len(matched)})
 
         # Dispatch after recording, so a task is always findable before its worker reports on it.
@@ -140,9 +159,11 @@ class Controller:
             if conn is None:
                 task.state = TaskState.FAILED
                 task.result = TaskResult(error="node disconnected before dispatch")
+                self._persist_task(task)
                 continue
             task.state = TaskState.DISPATCHED
             conn.node.running_tasks.append(task_id)
+            self._persist_task(task)
             await conn.dispatch(P.TaskAssignment(task_id=task_id, job_id=job.job_id, spec=spec))
         await self._maybe_finish_job(job.job_id)
         return job
@@ -182,6 +203,7 @@ class Controller:
             conn = self.nodes.get(node_id)
             if conn is not None and msg.task_id in conn.node.running_tasks:
                 conn.node.running_tasks.remove(msg.task_id)
+        self._persist_task(task)
         await self._emit("task_update", {"task_id": msg.task_id, "state": msg.state.value})
         await self._maybe_finish_job(task.job_id)
 
@@ -192,6 +214,7 @@ class Controller:
         tasks = [self.tasks[t] for t in job.task_ids if t in self.tasks]
         if tasks and all(t.state in TERMINAL_TASK_STATES for t in tasks):
             job.state = JobState.DONE
+            self._persist_job(job)
             await self._emit("job_done", {"job_id": job_id})
 
     # ----- read helpers for the surfaces -----

@@ -6,6 +6,7 @@ endpoint shapes. It is intentionally thin: each method maps to one route and ret
 
 from __future__ import annotations
 
+import os
 from typing import Any
 
 import httpx
@@ -14,19 +15,21 @@ from .models import JobSpec
 
 
 class ControllerClient:
-    def __init__(self, base_url: str = "http://127.0.0.1:8787", timeout: float = 620.0):
+    def __init__(self, base_url: str = "http://127.0.0.1:8787", timeout: float = 620.0, token: str | None = None):
         self.base_url = base_url.rstrip("/")
         self._timeout = timeout
+        token = token or os.environ.get("CORRAL_TOKEN")
+        self._headers = {"Authorization": f"Bearer {token}"} if token else {}
 
     async def _get(self, path: str) -> Any:
         async with httpx.AsyncClient(timeout=self._timeout) as c:
-            r = await c.get(self.base_url + path)
+            r = await c.get(self.base_url + path, headers=self._headers)
             r.raise_for_status()
             return r.json()
 
     async def _post(self, path: str, json: Any = None, params: dict | None = None) -> Any:
         async with httpx.AsyncClient(timeout=self._timeout) as c:
-            r = await c.post(self.base_url + path, json=json, params=params)
+            r = await c.post(self.base_url + path, json=json, params=params, headers=self._headers)
             r.raise_for_status()
             return r.json()
 

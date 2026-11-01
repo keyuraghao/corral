@@ -24,7 +24,7 @@ import asyncio
 import contextlib
 from typing import Any
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, Request, WebSocket, WebSocketDisconnect
 from fastapi.responses import JSONResponse
 
 from . import protocol as P
@@ -32,26 +32,49 @@ from .controller import Controller
 from .models import JobSpec
 
 
-def build_app(controller: Controller | None = None, *, with_dashboard: bool = False) -> FastAPI:
+def build_app(
+    controller: Controller | None = None,
+    *,
+    with_dashboard: bool = False,
+    auth_token: str | None = None,
+) -> FastAPI:
     ctrl = controller or Controller()
     app = FastAPI(title="Corral controller", version="0.1.0")
     app.state.controller = ctrl
+    app.state.auth_token = auth_token
+
+    def _check_rest_auth(request: Request) -> None:
+        """Require the shared token on API routes when one is configured. No token means open on localhost."""
+        if not auth_token:
+            return
+        header = request.headers.get("authorization", "")
+        presented = header[7:] if header.lower().startswith("bearer ") else request.headers.get("x-corral-token", "")
+        if presented != auth_token:
+            raise HTTPException(status_code=401, detail="missing or invalid token")
+
+    def _check_ws_auth(ws: WebSocket) -> bool:
+        if not auth_token:
+            return True
+        return ws.query_params.get("token", "") == auth_token
 
     @app.get("/healthz")
     async def healthz() -> dict[str, Any]:
         return {"ok": True, "nodes": len(ctrl.online_nodes()), "jobs": len(ctrl.jobs)}
 
     @app.get("/api/nodes")
-    async def list_nodes() -> dict[str, Any]:
+    async def list_nodes(request: Request) -> dict[str, Any]:
+        _check_rest_auth(request)
         return {"nodes": [n.model_dump(mode="json") for n in ctrl.online_nodes()]}
 
     @app.get("/api/jobs")
-    async def list_jobs() -> dict[str, Any]:
+    async def list_jobs(request: Request) -> dict[str, Any]:
+        _check_rest_auth(request)
         jobs = sorted(ctrl.jobs.values(), key=lambda j: j.created_at, reverse=True)
         return {"jobs": [j.model_dump(mode="json") for j in jobs]}
 
     @app.post("/api/jobs")
-    async def submit_job(spec: JobSpec, wait: bool = False, timeout: float = 600.0) -> JSONResponse:
+    async def submit_job(spec: JobSpec, request: Request, wait: bool = False, timeout: float = 600.0) -> JSONResponse:
+        _check_rest_auth(request)
         job = await ctrl.submit(spec)
         if wait:
             view = await ctrl.wait_for_job(job.job_id, timeout_s=timeout)
@@ -59,19 +82,24 @@ def build_app(controller: Controller | None = None, *, with_dashboard: bool = Fa
         return JSONResponse(ctrl.job_view(job.job_id))
 
     @app.get("/api/jobs/{job_id}")
-    async def get_job(job_id: str) -> JSONResponse:
+    async def get_job(job_id: str, request: Request) -> JSONResponse:
+        _check_rest_auth(request)
         view = ctrl.job_view(job_id)
         if view is None:
             return JSONResponse({"error": "no such job"}, status_code=404)
         return JSONResponse(view)
 
     @app.post("/api/jobs/{job_id}/cancel")
-    async def cancel_job(job_id: str) -> JSONResponse:
+    async def cancel_job(job_id: str, request: Request) -> JSONResponse:
+        _check_rest_auth(request)
         ok = await ctrl.cancel_job(job_id)
         return JSONResponse({"cancelled": ok}, status_code=200 if ok else 404)
 
     @app.websocket("/ws/worker")
     async def worker_ws(ws: WebSocket) -> None:
+        if not _check_ws_auth(ws):
+            await ws.close(code=4401, reason="unauthorized")
+            return
         await ws.accept()
         outgoing: asyncio.Queue[str] = asyncio.Queue()
 
@@ -109,6 +137,9 @@ def build_app(controller: Controller | None = None, *, with_dashboard: bool = Fa
 
     @app.websocket("/ws/events")
     async def events_ws(ws: WebSocket) -> None:
+        if not _check_ws_auth(ws):
+            await ws.close(code=4401, reason="unauthorized")
+            return
         await ws.accept()
         queue: asyncio.Queue[str] = asyncio.Queue()
 
