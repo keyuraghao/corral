@@ -4,6 +4,13 @@ All notable changes to Corral are documented here. The format follows Keep a Cha
 
 ## [Unreleased]
 
+### Added
+- The `vm` executor: run a job inside a guest VM of any OS, reverting it to a clean snapshot first. Pluggable providers (virsh, VirtualBox, a generic command template, loopback) manage snapshots and power; pluggable transports (SSH to any guest, or local) run the command. Corral installs nothing and only advertises `vm` on a worker configured with it.
+- The `agent` executor: hand a job to an independent agent program the worker is configured with, so a worker can be a reasoning agent rather than a dumb executor, while still fanning out in parallel across the fleet.
+- A live, game-like dashboard: the controller core at the center, workers as pods in orbit, and each task an orb that flies to the worker that runs it, with per-worker busy rings, log sparks, success and failure bursts, a HUD, and a live event feed. Hover a pod for details, click it to filter the feed.
+- The controller event stream now carries the node id on task events and the task-to-node assignments on job submission, so a live view can animate each task to its worker.
+- New CLI options: `corral worker --agent-cmd / --vm-provider / --vm-name / --vm-snapshot / --vm-ssh`, and `corral run -e vm --vm-snapshot / -e agent --agent-prompt`.
+
 ## [0.1.0] - 2026-11-01
 
 ### Added

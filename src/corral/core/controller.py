@@ -150,7 +150,12 @@ class Controller:
         job.state = JobState.RUNNING
         self.jobs[job.job_id] = job
         self._persist_job(job)
-        await self._emit("job_submitted", {"job": job.model_dump(mode="json"), "matched": len(matched)})
+        # Include the task-to-node assignments so a live view can animate each task to its worker.
+        assignments = [{"task_id": self.tasks[t].task_id, "node_id": self.tasks[t].node_id} for t in job.task_ids]
+        await self._emit(
+            "job_submitted",
+            {"job": job.model_dump(mode="json"), "matched": len(matched), "assignments": assignments},
+        )
 
         # Dispatch after recording, so a task is always findable before its worker reports on it.
         for task_id in job.task_ids:
@@ -189,7 +194,9 @@ class Controller:
         if task is None:
             return
         task.log.append((msg.stream, msg.line))
-        await self._emit("task_log", {"task_id": msg.task_id, "stream": msg.stream, "line": msg.line})
+        await self._emit(
+            "task_log", {"task_id": msg.task_id, "node_id": node_id, "stream": msg.stream, "line": msg.line}
+        )
 
     async def on_task_update(self, node_id: str, msg: P.TaskUpdate) -> None:
         self.touch(node_id)
@@ -204,7 +211,7 @@ class Controller:
             if conn is not None and msg.task_id in conn.node.running_tasks:
                 conn.node.running_tasks.remove(msg.task_id)
         self._persist_task(task)
-        await self._emit("task_update", {"task_id": msg.task_id, "state": msg.state.value})
+        await self._emit("task_update", {"task_id": msg.task_id, "node_id": node_id, "state": msg.state.value})
         await self._maybe_finish_job(task.job_id)
 
     async def _maybe_finish_job(self, job_id: str) -> None:

@@ -17,6 +17,11 @@ A <b>controller</b> that herds a fleet of disposable <b>worker nodes</b> across 
 
 </div>
 
+<p align="center">
+<img src="docs/screenshots/dashboard-arena.png" alt="The Corral control dashboard: a central controller core with worker pods in orbit and task orbs in flight" width="900" />
+<br/><em>The live control dashboard: the controller core at the center, workers as pods in orbit, and each task an orb flying out to the node that runs it.</em>
+</p>
+
 ## Why
 
 A Claude session, or any single agent, lives on one machine with one operating system. A lot of real work does not fit there. You want to run the same test on Linux, Windows and macOS at once. You want to reproduce a published CVE against a specific vulnerable version in a throwaway environment, confirm a patched version is not affected, and keep nothing behind. One box cannot be all of those at the same time.
@@ -27,8 +32,8 @@ Corral splits the problem. A long-running **controller** holds a registry of **w
 
 Alpha, built milestone by milestone, with green CI on Linux, Windows and macOS.
 
-- **Working now:** the controller, the WebSocket worker protocol, the `local` and `docker` executors, job fan-out across every matching node, live log streaming, optional SQLite persistence and shared-token auth, the read-only web dashboard, the cross-platform test runner, the defensive CVE-reproduction workload, and all three surfaces (CLI, MCP, dashboard) over the lot.
-- **Next:** snapshot-revert VM workers for Windows and macOS targets, so a job can land on a real Windows or macOS environment and not only a Linux container. The worker and executor interfaces are built to take a new executor type without touching the controller.
+- **Working now:** the controller, the WebSocket worker protocol, the `local`, `docker`, `vm`, and `agent` executors, job fan-out across every matching node, live log streaming, optional SQLite persistence and shared-token auth, the live game-like web dashboard, the cross-platform test runner, the defensive CVE-reproduction workload, and all three surfaces (CLI, MCP, dashboard) over the lot.
+- **Any OS, any language:** the `vm` executor runs a job inside a guest VM of any operating system, reverting it to a clean snapshot first; the `agent` executor turns a worker into an independent agent so many agents work in parallel. A job, a probe, or an agent is just a command, so the work can be written in any language, not only Python.
 
 See [CHANGELOG.md](CHANGELOG.md) for what landed when.
 
@@ -82,6 +87,7 @@ See [SECURITY.md](SECURITY.md).
 
 - [Architecture](docs/architecture.md) - the controller, workers, executors, and how fan-out works.
 - [CLI](docs/cli.md) - every command and its options.
+- [Dashboard](docs/dashboard.md) - the live, game-like fleet view.
 - [MCP server](docs/mcp.md) - transports, registering with agents, and the tool list.
 - [Worker protocol](docs/protocol.md) - the WebSocket messages and the connection lifecycle.
 - [CVE reproduction](docs/cve.md) - the defensive workflow and the recipe format, with [examples](docs/examples/).
