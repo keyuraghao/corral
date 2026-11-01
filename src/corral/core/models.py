@@ -29,10 +29,21 @@ def now() -> float:
 
 
 class Executor(str, Enum):
-    """How a worker runs a job. The worker advertises which of these it supports."""
+    """How a worker runs a job. The worker advertises which of these it supports.
+
+    local  - run the command on the worker host.
+    docker - run it in a disposable Linux container.
+    vm     - run it inside a guest VM of any OS that the worker manages, reverting the guest to a
+             clean snapshot first so each job starts from a known state.
+    agent  - hand the command to an independent agent program the worker is configured with, so a
+             worker can be a reasoning agent rather than a dumb executor. Agent tasks still fan out
+             and run in parallel across the fleet like any other job.
+    """
 
     LOCAL = "local"
     DOCKER = "docker"
+    VM = "vm"
+    AGENT = "agent"
 
 
 class NodeStatus(str, Enum):
@@ -103,6 +114,12 @@ class JobSpec(BaseModel):
     network: bool = False  # disposable containers are network-isolated by default
     workdir: str = "/work"
     timeout_s: float = 300.0
+    # VM executor: revert the guest to this snapshot before running, instead of the worker's default.
+    # None means use whatever snapshot the worker was configured with.
+    vm_snapshot: str | None = None
+    # Agent executor: an optional prompt handed to the agent program on stdin, in addition to the
+    # command, for when the agent reads its instructions from stdin rather than argv.
+    agent_prompt: str = ""
     # Selector. All present constraints must match. Empty means match every online node.
     select_os: str | None = None
     select_arch: str | None = None

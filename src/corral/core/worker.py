@@ -22,7 +22,7 @@ import uuid
 import websockets
 
 from . import protocol as P
-from .executors import BaseExecutor, RunHandle, default_executors
+from .executors import AgentExecutor, BaseExecutor, RunHandle, default_executors
 from .models import Executor, NodeInfo, TaskResult, TaskState
 
 
@@ -43,13 +43,9 @@ def detect_docker(docker_bin: str = "docker") -> bool:
         return False
 
 
-def gather_node_info(node_id: str, labels: list[str], docker_bin: str = "docker") -> NodeInfo:
-    """Describe this host for the controller's registry."""
+def gather_node_info(node_id: str, labels: list[str], executors: list[Executor], docker_available: bool) -> NodeInfo:
+    """Describe this host for the controller's registry from the executors the worker actually offers."""
 
-    has_docker = detect_docker(docker_bin)
-    executors = [Executor.LOCAL]
-    if has_docker:
-        executors.append(Executor.DOCKER)
     return NodeInfo(
         node_id=node_id,
         hostname=socket.gethostname(),
@@ -57,12 +53,18 @@ def gather_node_info(node_id: str, labels: list[str], docker_bin: str = "docker"
         arch=platform.machine().lower(),
         executors=executors,
         labels=labels,
-        docker_available=has_docker,
+        docker_available=docker_available,
     )
 
 
 class Worker:
-    """A worker process. Construct it, then `await run()` to serve until interrupted."""
+    """A worker process. Construct it, then `await run()` to serve until interrupted.
+
+    By default a worker offers the local and docker executors. Pass `agent_cmd` to also offer the
+    agent executor (the worker becomes a reasoning agent), and `vm_executor` to offer the vm executor
+    (the worker manages a guest VM). A worker advertises exactly the executors it can run, so the
+    controller only ever sends it work it is equipped for.
+    """
 
     def __init__(
         self,
@@ -73,6 +75,8 @@ class Worker:
         heartbeat_s: float = 15.0,
         reconnect_max_s: float = 30.0,
         token: str | None = None,
+        agent_cmd: list[str] | None = None,
+        vm_executor: BaseExecutor | None = None,
     ):
         self.controller_url = controller_url.rstrip("/")
         self.node_id = node_id or f"node_{uuid.uuid4().hex[:8]}"
@@ -81,7 +85,14 @@ class Worker:
         self.heartbeat_s = heartbeat_s
         self.reconnect_max_s = reconnect_max_s
         self.token = token
+        self.docker_available = detect_docker(docker_bin)
         self.executors: dict[Executor, BaseExecutor] = default_executors(docker_bin=docker_bin)
+        if not self.docker_available:
+            self.executors.pop(Executor.DOCKER, None)
+        if agent_cmd:
+            self.executors[Executor.AGENT] = AgentExecutor(agent_cmd)
+        if vm_executor is not None:
+            self.executors[Executor.VM] = vm_executor
         self._running: dict[str, RunHandle] = {}
         self._bg: set[asyncio.Task] = set()
         self._ws: websockets.ClientConnection | None = None
@@ -115,7 +126,7 @@ class Worker:
         endpoint = self._ws_endpoint()
         async with websockets.connect(endpoint, max_size=None) as ws:
             self._ws = ws
-            info = gather_node_info(self.node_id, self.labels, self.docker_bin)
+            info = gather_node_info(self.node_id, self.labels, list(self.executors.keys()), self.docker_available)
             await ws.send(P.encode(P.Hello(info=info)))
             execs = ",".join(e.value for e in info.executors)
             print(f"[worker {self.node_id}] connected to {endpoint} as {info.os}/{info.arch}, executors={execs}")

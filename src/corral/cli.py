@@ -16,6 +16,7 @@ core, and formats the result with Rich. The subcommands:
 from __future__ import annotations
 
 import asyncio
+import shlex
 
 import typer
 from rich.console import Console
@@ -108,13 +109,51 @@ def worker(
         envvar="CORRAL_TOKEN",
         help="Shared token the controller requires. Omit when the controller runs open.",
     ),
+    agent_cmd: str = typer.Option(
+        None, "--agent-cmd", help="Make this worker an agent: the program to hand agent jobs to, e.g. 'claude -p'."
+    ),
+    vm_provider: str = typer.Option(
+        None, "--vm-provider", help="Offer the vm executor via this provider: virsh, vbox, command, or loopback."
+    ),
+    vm_name: str = typer.Option(None, "--vm-name", help="The guest domain or VM name the provider manages."),
+    vm_snapshot: str = typer.Option(None, "--vm-snapshot", help="Snapshot to revert the guest to before each job."),
+    vm_ssh: str = typer.Option(
+        None, "--vm-ssh", help="SSH target for the guest, e.g. user@10.0.0.5. Omit to run on the host."
+    ),
+    vm_revert_cmd: str = typer.Option(
+        "", "--vm-revert-cmd", help="command provider: revert template, may use {snapshot}."
+    ),
+    vm_start_cmd: str = typer.Option("", "--vm-start-cmd", help="command provider: start template."),
 ) -> None:
-    """Start a worker that dials into a controller and runs what it is told."""
+    """Start a worker that dials into a controller and runs what it is told.
+
+    By default the worker offers the local and docker executors. --agent-cmd adds the agent executor,
+    and --vm-provider adds the vm executor for a guest of any OS.
+    """
 
     from .core.worker import Worker
 
-    w = Worker(controller_url=controller, labels=list(label), node_id=node_id, docker_bin=docker_bin, token=token)
-    console.print(f"[cyan]worker[/cyan] starting, dialing {controller} (labels: {', '.join(label) or 'none'})")
+    agent = shlex.split(agent_cmd) if agent_cmd else None
+    vm_exec = None
+    if vm_provider:
+        from .core.vm import VmExecutor, build_provider, build_transport
+
+        provider = build_provider(vm_provider, name=vm_name or "", revert_tmpl=vm_revert_cmd, start_tmpl=vm_start_cmd)
+        transport = build_transport(vm_ssh or "")
+        vm_exec = VmExecutor(provider=provider, transport=transport, default_snapshot=vm_snapshot)
+
+    w = Worker(
+        controller_url=controller,
+        labels=list(label),
+        node_id=node_id,
+        docker_bin=docker_bin,
+        token=token,
+        agent_cmd=agent,
+        vm_executor=vm_exec,
+    )
+    extras = [e for e, on in (("agent", agent), ("vm", vm_exec)) if on]
+    suffix = f", also offering: {', '.join(extras)}" if extras else ""
+    console.print(f"[cyan]worker[/cyan] starting, dialing {controller} (labels: {', '.join(label) or 'none'}){suffix}")
     try:
         asyncio.run(w.run())
     except KeyboardInterrupt:
@@ -128,7 +167,9 @@ def worker(
 def run(
     command: list[str] = typer.Argument(..., help="The command to run. Put it after -- to avoid option parsing."),
     api: str = typer.Option("http://127.0.0.1:8787", help="Controller API base URL."),
-    executor: Executor = typer.Option(Executor.LOCAL, "--executor", "-e", help="How to run: local or docker."),
+    executor: Executor = typer.Option(
+        Executor.LOCAL, "--executor", "-e", help="How to run: local, docker, vm, or agent."
+    ),
     image: str = typer.Option("alpine:3.20", help="Docker image (docker executor only)."),
     network: bool = typer.Option(False, "--network", help="Give docker jobs a network. Off by default."),
     shell: bool = typer.Option(False, "--shell", help="Run the command through a shell instead of as argv."),
@@ -137,6 +178,10 @@ def run(
     arch_sel: str = typer.Option(None, "--arch", help="Only nodes with this arch."),
     label_sel: list[str] = typer.Option([], "--select-label", help="Only nodes carrying all these labels."),
     name: str = typer.Option("", "--name", help="A label for the job in listings."),
+    vm_snapshot: str = typer.Option(
+        None, "--vm-snapshot", help="vm executor: revert the guest to this snapshot first."
+    ),
+    agent_prompt: str = typer.Option("", "--agent-prompt", help="agent executor: prompt fed to the agent on stdin."),
     no_wait: bool = typer.Option(False, "--no-wait", help="Submit and return immediately."),
 ) -> None:
     """Fan a command out to every matching node and print each result."""
@@ -153,6 +198,8 @@ def run(
         select_labels=list(label_sel),
         select_executor=executor,
         name=name,
+        vm_snapshot=vm_snapshot,
+        agent_prompt=agent_prompt,
     )
     client = ControllerClient(base_url=api)
 
