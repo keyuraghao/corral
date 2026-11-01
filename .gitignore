@@ -1,0 +1,32 @@
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Python build / cache
+__pycache__/
+*.py[cod]
+*.egg-info/
+.eggs/
+build/
+dist/
+*.spec.bak
+
+# Test / coverage
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+coverage.xml
+
+# Local runtime state (job store, node registry, artifacts)
+.corral/
+corral-data/
+artifacts/
+
+# Editor / OS
+.idea/
+.vscode/
+*.swp
+.DS_Store
