@@ -253,6 +253,102 @@ def cancel(job_id: str, api: str = typer.Option("http://127.0.0.1:8787", help="C
 
 
 @app.command()
+def testrun(
+    command: list[str] = typer.Argument(..., help="The test command. Put it after -- to avoid option parsing."),
+    api: str = typer.Option("http://127.0.0.1:8787", help="Controller API base URL."),
+    executor: Executor = typer.Option(Executor.DOCKER, "--executor", "-e", help="local or docker."),
+    image: str = typer.Option("python:3.12-slim", help="Docker image for the docker executor."),
+    shell: bool = typer.Option(True, "--shell/--no-shell", help="Run the command through a shell."),
+    network: bool = typer.Option(True, "--network/--no-network", help="Give the test a network (on by default here)."),
+    timeout: float = typer.Option(900.0, help="Per-node timeout in seconds."),
+    os_sel: str = typer.Option(None, "--os", help="Only nodes with this OS."),
+    label_sel: list[str] = typer.Option([], "--select-label", help="Only nodes carrying all these labels."),
+) -> None:
+    """Run a test command across every matching node and report pass/fail per node."""
+
+    from .workloads.testrunner import run_test_matrix
+
+    client = ControllerClient(base_url=api)
+
+    async def _go():
+        return await run_test_matrix(
+            client,
+            list(command),
+            executor=executor,
+            image=image,
+            shell=shell,
+            network=network,
+            timeout_s=timeout,
+            select_os=os_sel,
+            select_labels=list(label_sel),
+        )
+
+    try:
+        result = asyncio.run(_go())
+    except Exception as exc:
+        console.print(f"[red]could not reach controller at {api}:[/red] {exc}")
+        raise typer.Exit(1) from exc
+    colour = "green" if result.passed else "red"
+    console.print(Panel.fit(f"[{colour}]{result.summary_line()}[/{colour}]", border_style=colour))
+    table = Table(title="Test matrix")
+    table.add_column("node", style="cyan")
+    table.add_column("result")
+    table.add_column("exit", justify="right")
+    for n in result.per_node:
+        mark = "[green]pass[/green]" if n["passed"] else "[red]fail[/red]"
+        table.add_row(n["node_id"], mark, str(n["exit_code"]))
+    console.print(table)
+    if not result.passed:
+        raise typer.Exit(1)
+
+
+@app.command()
+def cve(
+    recipe: str = typer.Option(..., "--recipe", "-r", help="Path to a JSON reproduction recipe."),
+    api: str = typer.Option("http://127.0.0.1:8787", help="Controller API base URL."),
+    out: str = typer.Option(None, "--out", "-o", help="Write the Markdown report to this path."),
+    fetch: bool = typer.Option(True, "--fetch/--no-fetch", help="Fetch the public advisory for context."),
+) -> None:
+    """Reproduce a published CVE in a disposable sandbox and write a defender's report.
+
+    For authorized, defensive use on infrastructure you control: confirm whether a version is affected,
+    check that a patched version is not, and produce a write-up. The recipe supplies the images and the
+    operator's own presence check; Corral holds no exploit payloads.
+    """
+
+    import json
+    from pathlib import Path
+
+    from .workloads.cve import CveRecipe, render_markdown, reproduce
+
+    try:
+        data = json.loads(Path(recipe).read_text(encoding="utf-8"))
+        rec = CveRecipe.model_validate(data)
+    except (OSError, ValueError) as exc:
+        console.print(f"[red]could not load recipe:[/red] {exc}")
+        raise typer.Exit(1) from exc
+
+    client = ControllerClient(base_url=api)
+
+    async def _go():
+        return await reproduce(client, rec, fetch=fetch)
+
+    try:
+        report = asyncio.run(_go())
+    except Exception as exc:
+        console.print(f"[red]could not reach controller at {api}:[/red] {exc}")
+        raise typer.Exit(1) from exc
+    md = render_markdown(report)
+    colour = "red" if report.exposure_confirmed else "green"
+    console.print(Panel.fit(f"[{colour}]{report.verdict_line()}[/{colour}]", border_style=colour))
+    if out:
+        Path(out).write_text(md, encoding="utf-8")
+        console.print(f"report written to [cyan]{out}[/cyan]")
+    else:
+        console.print(md)
+
+
+@app.command()
 def mcp(
     transport: str = typer.Option("stdio", help="stdio, streamable-http, or sse."),
     host: str = typer.Option("127.0.0.1", help="Bind address for HTTP transports."),

@@ -130,6 +130,78 @@ def build_server(api: str) -> _McpServer:
         """Cancel a running job. Any still-running container is killed and leaves nothing behind."""
         return {"result": await client.cancel(job_id)}
 
+    @mcp.tool()
+    async def test_matrix(
+        command: list[str],
+        executor: str = "docker",
+        image: str = "python:3.12-slim",
+        shell: bool = True,
+        network: bool = True,
+        timeout_s: float = 900.0,
+        select_os: str | None = None,
+        select_labels: list[str] | None = None,
+    ) -> dict[str, Any]:
+        """Run one test command across every matching node and report pass or fail per node. A node passes when the command exits zero. Use this to answer whether something passes across the OS matrix at once. The docker executor gets a network by default here since tests usually need their dependencies."""
+        from ..workloads.testrunner import run_test_matrix
+
+        result = await run_test_matrix(
+            client,
+            command,
+            executor=Executor(executor),
+            image=image,
+            shell=shell,
+            network=network,
+            timeout_s=timeout_s,
+            select_os=select_os,
+            select_labels=select_labels or [],
+        )
+        return {
+            "result": {
+                "passed": result.passed,
+                "passes": result.passes,
+                "total": result.total,
+                "job_id": result.job_id,
+                "per_node": result.per_node,
+            }
+        }
+
+    @mcp.tool()
+    async def reproduce_cve(
+        cve_id: str,
+        affected_image: str,
+        probe: list[str],
+        patched_image: str | None = None,
+        probe_shell: bool = True,
+        network: bool = False,
+        timeout_s: float = 300.0,
+        select_labels: list[str] | None = None,
+        summary: str = "",
+        fetch_advisory: bool = True,
+    ) -> dict[str, Any]:
+        """Reproduce one published CVE in a disposable, network-isolated sandbox for authorized defensive work, and return a verdict plus a Markdown report. Confirms whether affected_image is vulnerable and, if patched_image is given, whether the fix closes it. probe is the operator's own presence check run inside the container; by convention it exits 0 when the vulnerable condition is observed and non-zero when it is not. This tool reproduces and documents a vulnerability on infrastructure you control; it does not generate or run exploit payloads of its own. Use it only against systems you are authorized to test."""
+        from ..workloads.cve import CveRecipe, render_markdown, reproduce
+
+        recipe = CveRecipe(
+            cve_id=cve_id,
+            summary=summary,
+            affected_image=affected_image,
+            patched_image=patched_image,
+            probe=probe,
+            probe_shell=probe_shell,
+            network=network,
+            timeout_s=timeout_s,
+            select_labels=select_labels or [],
+        )
+        report = await reproduce(client, recipe, fetch=fetch_advisory)
+        return {
+            "result": {
+                "verdict": report.verdict_line(),
+                "exposure_confirmed": report.exposure_confirmed,
+                "patch_closes_it": report.patch_closes_it,
+                "report_markdown": render_markdown(report),
+            }
+        }
+
     return mcp
 
 
